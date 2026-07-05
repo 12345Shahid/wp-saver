@@ -9,6 +9,61 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const logger = require('./logger');
 const supabase = require('./supabase');
+const express = require('express');
+const qrcodeImage = require('qrcode');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+let currentQrDataUrl = null;
+let isAuthenticated = false;
+
+app.get('/', (req, res) => {
+    res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Auto-Saver Status</title>
+    <meta http-equiv="refresh" content="3">
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; text-align: center; }
+        .card { background: #1e293b; padding: 32px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); max-width: 420px; width: 100%; border: 1px solid #334155; }
+        h1 { font-size: 20px; margin-top: 0; color: #38bdf8; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+        .qr-box { background: white; padding: 16px; border-radius: 12px; display: inline-block; margin: 20px 0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
+        .qr-box img { width: 220px; height: 220px; display: block; }
+        .badge { display: inline-block; padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+        .waiting { background: #451a03; color: #fbbf24; border: 1px solid #78350f; }
+        .online { background: #064e3b; color: #34d399; border: 1px solid #065f46; }
+        .footer { font-size: 12px; color: #64748b; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🤖 WhatsApp Auto-Saver</h1>
+        ${isAuthenticated ? `
+            <div class="badge online">● ONLINE & CONNECTED</div>
+            <p style="color: #cbd5e1; font-weight: 500;">Your WhatsApp account is linked! Listening for incoming and deleted messages 24/7.</p>
+        ` : currentQrDataUrl ? `
+            <div class="badge waiting">● WAITING FOR SCAN</div>
+            <p>Open WhatsApp on your phone → Settings → Linked Devices → <b>Link a Device</b> and scan below:</p>
+            <div class="qr-box">
+                <img src="${currentQrDataUrl}" alt="QR Code" />
+            </div>
+            <p style="font-size: 12px; color: #64748b;">Page auto-refreshes every 3s. Guaranteed 220x220 compact size!</p>
+        ` : `
+            <div class="badge waiting">● STARTING BROWSER...</div>
+            <p>Chromium is starting in the cloud container. Please wait ~20 seconds for the QR code to appear...</p>
+        `}
+        <div class="footer">WhatsApp Auto-Saver & Deletion Bypass (Level 1)</div>
+    </div>
+</body>
+</html>`);
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🌐 Web Dashboard online! Visit port ${PORT} or your Railway Domain URL to view the QR scanner.`);
+});
 
 // Show start banner
 logger.banner();
@@ -45,14 +100,18 @@ const client = new Client({
  * Event: QR Code generated
  * Scan this with your phone in WhatsApp -> Linked Devices -> Link a device
  */
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
+    try {
+        currentQrDataUrl = await qrcodeImage.toDataURL(qr, { width: 300, margin: 1 });
+    } catch (e) {}
+    isAuthenticated = false;
     logger.qr('====================================================================');
-    logger.qr('🔗 FIXED SMALL QR CODE URL (EXACT 220px - GUARANTEED NO SCROLLING):');
+    logger.qr('🌐 WEB DASHBOARD ACTIVE! Open your Railway Domain URL in a browser tab');
+    logger.qr('to view a clean, beautifully styled 220x220 QR scanner box!');
+    logger.qr('====================================================================');
+    logger.qr('🔗 ALTERNATIVE IMAGE URL (IF NOT USING WEB DASHBOARD):');
     const qrImageUrl = `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(qr)}`;
     console.log(`\n${qrImageUrl}\n`);
-    logger.qr('====================================================================');
-    logger.info('Attempting terminal QR display below (ignore if distorted by cloud logs):');
-    qrcode.generate(qr, { small: true });
     logger.info('Waiting for QR code scan from your phone...');
 });
 
@@ -60,6 +119,8 @@ client.on('qr', (qr) => {
  * Event: Client Authenticated
  */
 client.on('authenticated', () => {
+    isAuthenticated = true;
+    currentQrDataUrl = null;
     logger.success('Authentication successful! Session credentials saved locally.');
 });
 
@@ -67,6 +128,7 @@ client.on('authenticated', () => {
  * Event: Authentication Failure
  */
 client.on('auth_failure', (msg) => {
+    isAuthenticated = false;
     logger.error('Authentication failed!', msg);
 });
 
@@ -74,6 +136,8 @@ client.on('auth_failure', (msg) => {
  * Event: Client is Ready and Connected
  */
 client.on('ready', async () => {
+    isAuthenticated = true;
+    currentQrDataUrl = null;
     logger.success('🤖 WHATSAPP AUTO-SAVER IS ONLINE AND CONNECTED!');
     logger.info('Listening for incoming text messages, voice notes, images, and deletions...');
     
@@ -237,6 +301,8 @@ client.on('message_revoke_everyone', async (after, before) => {
  * Event: Disconnected
  */
 client.on('disconnected', (reason) => {
+    isAuthenticated = false;
+    currentQrDataUrl = null;
     logger.warn('WhatsApp Client was disconnected:', reason);
 });
 
