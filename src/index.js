@@ -254,6 +254,30 @@ process.on('SIGTERM', async () => {
     process.exit(0);
 });
 
+// Clean up any stale Chromium SingletonLock files left by abrupt container restarts
+try {
+    const fs = require('fs');
+    const path = require('path');
+    const authDir = path.join(__dirname, '..', '.wwebjs_auth');
+    if (fs.existsSync(authDir)) {
+        const cleanLocks = (dir) => {
+            const files = fs.readdirSync(dir, { withFileTypes: true });
+            for (const file of files) {
+                const fullPath = path.join(dir, file.name);
+                if (file.isDirectory()) {
+                    cleanLocks(fullPath);
+                } else if (file.name.includes('SingletonLock') || file.name.includes('SingletonCookie') || file.name.includes('SingletonSocket')) {
+                    try {
+                        fs.unlinkSync(fullPath);
+                        logger.info(`🧹 Cleaned stale browser lock file: ${file.name}`);
+                    } catch (e) {}
+                }
+            }
+        };
+        cleanLocks(authDir);
+    }
+} catch (e) {}
+
 // Start the client
 logger.info('Initializing WhatsApp Web browser instance...');
 client.initialize();
