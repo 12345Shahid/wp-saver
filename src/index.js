@@ -47,11 +47,9 @@ const client = new Client({
  */
 client.on('qr', (qr) => {
     logger.qr('====================================================================');
-    logger.qr('🔗 SMALL COMPACT QR CODE URL (130x130):');
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(qr)}`;
+    logger.qr('🔗 FIXED SMALL QR CODE URL (EXACT 220px - GUARANTEED NO SCROLLING):');
+    const qrImageUrl = `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(qr)}`;
     console.log(`\n${qrImageUrl}\n`);
-    logger.qr('💡 TIP: If your browser zooms in on the image automatically,');
-    logger.qr('press [Cmd + Minus (-)] on Mac or [Ctrl + Minus (-)] on Windows to shrink it!');
     logger.qr('====================================================================');
     logger.info('Attempting terminal QR display below (ignore if distorted by cloud logs):');
     qrcode.generate(qr, { small: true });
