@@ -47,8 +47,8 @@ const client = new Client({
  */
 client.on('qr', (qr) => {
     logger.qr('====================================================================');
-    logger.qr('🔗 QR CODE URL (CLICK OR COPY/PASTE INTO BROWSER TO SCAN EASILY):');
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qr)}`;
+    logger.qr('🔗 QR CODE URL (COMPACT 180x180 SIZE - NO SCROLLING NEEDED):');
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qr)}`;
     console.log(`\n${qrImageUrl}\n`);
     logger.qr('====================================================================');
     logger.info('Attempting terminal QR display below (ignore if distorted by cloud logs):');
