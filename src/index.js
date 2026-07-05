@@ -46,7 +46,12 @@ const client = new Client({
  * Scan this with your phone in WhatsApp -> Linked Devices -> Link a device
  */
 client.on('qr', (qr) => {
-    logger.qr('SCAN THIS QR CODE WITH YOUR WHATSAPP TO LINK DEVICE:');
+    logger.qr('====================================================================');
+    logger.qr('🔗 QR CODE URL (CLICK OR COPY/PASTE INTO BROWSER TO SCAN EASILY):');
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(qr)}`;
+    console.log(`\n${qrImageUrl}\n`);
+    logger.qr('====================================================================');
+    logger.info('Attempting terminal QR display below (ignore if distorted by cloud logs):');
     qrcode.generate(qr, { small: true });
     logger.info('Waiting for QR code scan from your phone...');
 });
