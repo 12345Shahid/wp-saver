@@ -1,0 +1,25 @@
+{
+  "name": "whatsapp-auto-saver",
+  "version": "1.0.0",
+  "description": "Custom WhatsApp Auto-Saver & Deleted Message Catcher (Level 1)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "supabase",
+    "auto-saver",
+    "whatsapp-web.js",
+    "deleted-messages"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "dotenv": "^16.4.7",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}
