@@ -2,6 +2,9 @@
  * Supabase Database and Storage connector for WhatsApp Auto-Saver
  */
 require('dotenv').config();
+if (typeof global.WebSocket === 'undefined') {
+    try { global.WebSocket = require('ws'); } catch (e) {}
+}
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 

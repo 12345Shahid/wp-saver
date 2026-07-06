@@ -1,11 +1,21 @@
-# Use official Node.js LTS image on Debian/Ubuntu
-FROM node:20-slim
+# Use official Node.js 22 LTS image on Debian bookworm
+FROM node:22-bookworm-slim
 
-# Install Chromium and necessary system font dependencies for Puppeteer
+# Install Chromium and necessary system shared libraries / font dependencies for Puppeteer
 RUN apt-get update && apt-get install -y \
     chromium \
-    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf \
+    wget \
+    gnupg \
     ca-certificates \
+    procps \
+    libxss1 \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libgtk-3-0 \
+    libgbm1 \
+    libasound2 \
+    fonts-liberation \
+    fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 

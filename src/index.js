@@ -91,7 +91,10 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-default-browser-check',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--single-process',
+            '--no-zygote',
+            '--disable-extensions'
         ]
     }
 });
