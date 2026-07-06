@@ -62,7 +62,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🌐 Web Dashboard online! Visit port ${PORT} or your Railway Domain URL to view the QR scanner.`);
+    logger.info(`🌐 Web Dashboard online! Visit http://localhost:${PORT} or your cloud domain URL to view the QR scanner.`);
 });
 
 // Show start banner
@@ -106,8 +106,8 @@ client.on('qr', async (qr) => {
     } catch (e) {}
     isAuthenticated = false;
     logger.qr('====================================================================');
-    logger.qr('🌐 WEB DASHBOARD ACTIVE! Open your Railway Domain URL in a browser tab');
-    logger.qr('to view a clean, beautifully styled 220x220 QR scanner box!');
+    logger.qr('🌐 WEB DASHBOARD ACTIVE! Open http://localhost:3000 or your domain URL');
+    logger.qr('in a browser tab to view a clean, styled 220x220 QR scanner box!');
     logger.qr('====================================================================');
     logger.qr('🔗 ALTERNATIVE IMAGE URL (IF NOT USING WEB DASHBOARD):');
     const qrImageUrl = `https://quickchart.io/qr?size=220&margin=1&text=${encodeURIComponent(qr)}`;
