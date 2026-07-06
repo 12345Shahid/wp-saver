@@ -1,0 +1,20 @@
+[phases.setup]
+nixPkgs = [
+  "nodejs_22",
+  "chromium",
+  "wget",
+  "gnupg",
+  "procps",
+  "libxss",
+  "nss",
+  "at-spi2-atk",
+  "gtk3",
+  "mesa",
+  "alsa-lib"
+]
+
+[phases.build]
+cmds = ["npm install --omit=dev"]
+
+[start]
+cmd = "npm start"

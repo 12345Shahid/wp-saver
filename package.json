@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Custom WhatsApp Auto-Saver & Deleted Message Catcher (Level 1)",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js"
