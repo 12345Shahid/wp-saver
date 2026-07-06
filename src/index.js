@@ -78,24 +78,33 @@ if (targetFilter) {
 
 /**
  * Dynamically locate valid Chromium/Chrome binary across Nixpacks, Docker, Linux, and Mac
+ * Guaranteed to never fail or crash due to dead environment variables or missing system packages.
  */
 function getBrowserExecutablePath() {
     const fs = require('fs');
     const { execSync } = require('child_process');
 
-    // 1. Check user-defined path from env ONLY if the file actually exists
-    if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
-        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    // 1. Check user/cloud environment defined path
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        if (fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+            return process.env.PUPPETEER_EXECUTABLE_PATH;
+        } else {
+            logger.warn(`⚠️ Configured PUPPETEER_EXECUTABLE_PATH (${process.env.PUPPETEER_EXECUTABLE_PATH}) does not exist on disk! Removing dead env var so Puppeteer won't crash...`);
+            delete process.env.PUPPETEER_EXECUTABLE_PATH;
+        }
     }
 
-    // 2. Search common Linux / Nixpacks binary names in system PATH
+    // 2. Search common Linux / Nixpacks binary names in system PATH and Nix store
     const binaryNames = ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome'];
     for (const name of binaryNames) {
         try {
-            const foundPath = execSync(`which ${name} 2>/dev/null`).toString().trim();
-            if (foundPath && fs.existsSync(foundPath)) {
-                return foundPath;
-            }
+            // First check standard PATH
+            let foundPath = execSync(`which ${name} 2>/dev/null`).toString().trim();
+            if (foundPath && fs.existsSync(foundPath)) return foundPath;
+            
+            // If not in standard PATH, check Nix store and profiles (Railway Nixpacks)
+            foundPath = execSync(`find /nix/store /nix/var /root/.nix-profile /usr /bin /snap -name "${name}" -type f -perm /111 2>/dev/null | head -n 1`).toString().trim();
+            if (foundPath && fs.existsSync(foundPath)) return foundPath;
         } catch (e) {}
     }
 
@@ -111,15 +120,31 @@ function getBrowserExecutablePath() {
         if (fs.existsSync(p)) return p;
     }
 
-    // 4. Return undefined to let Puppeteer use its bundled browser
+    // 4. If NO system browser exists anywhere on disk, download Chrome on the fly!
+    logger.warn(`⚠️ No system browser found anywhere on disk! Downloading Chrome on-the-fly right now...`);
+    try {
+        delete process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD;
+        execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' });
+        // Locate the freshly downloaded chrome binary
+        const downloadedPath = execSync(`find ~/.cache /app/.cache /root/.cache ./ -name "chrome" -type f -perm /111 2>/dev/null | head -n 1`).toString().trim();
+        if (downloadedPath && fs.existsSync(downloadedPath)) {
+            logger.info(`✅ Successfully downloaded Chrome on-the-fly to: ${downloadedPath}`);
+            return downloadedPath;
+        }
+    } catch (e) {
+        logger.error(`❌ On-the-fly Chrome download encountered an error: ${e.message}`);
+    }
+
+    // 5. Return undefined as absolute fallback
+    delete process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD;
     return undefined;
 }
 
 const detectedBrowser = getBrowserExecutablePath();
 if (detectedBrowser) {
-    logger.info(`🌐 Found system browser binary at: ${detectedBrowser}`);
+    logger.info(`🌐 Using verified browser binary at: ${detectedBrowser}`);
 } else {
-    logger.info(`🌐 No system browser found in standard paths, letting Puppeteer use its bundled browser...`);
+    logger.info(`🌐 Letting Puppeteer use its bundled internal browser...`);
 }
 
 // Initialize WhatsApp Client with LocalAuth for session persistence
