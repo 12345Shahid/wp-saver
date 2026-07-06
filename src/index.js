@@ -76,6 +76,52 @@ if (targetFilter) {
     logger.info(`🌐 NO FILTER SET: Capturing messages from ALL incoming chats.`);
 }
 
+/**
+ * Dynamically locate valid Chromium/Chrome binary across Nixpacks, Docker, Linux, and Mac
+ */
+function getBrowserExecutablePath() {
+    const fs = require('fs');
+    const { execSync } = require('child_process');
+
+    // 1. Check user-defined path from env ONLY if the file actually exists
+    if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+
+    // 2. Search common Linux / Nixpacks binary names in system PATH
+    const binaryNames = ['chromium', 'chromium-browser', 'google-chrome-stable', 'google-chrome'];
+    for (const name of binaryNames) {
+        try {
+            const foundPath = execSync(`which ${name} 2>/dev/null`).toString().trim();
+            if (foundPath && fs.existsSync(foundPath)) {
+                return foundPath;
+            }
+        } catch (e) {}
+    }
+
+    // 3. Check common hardcoded standard paths
+    const standardPaths = [
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/snap/bin/chromium'
+    ];
+    for (const p of standardPaths) {
+        if (fs.existsSync(p)) return p;
+    }
+
+    // 4. Return undefined to let Puppeteer use its bundled browser
+    return undefined;
+}
+
+const detectedBrowser = getBrowserExecutablePath();
+if (detectedBrowser) {
+    logger.info(`🌐 Found system browser binary at: ${detectedBrowser}`);
+} else {
+    logger.info(`🌐 No system browser found in standard paths, letting Puppeteer use its bundled browser...`);
+}
+
 // Initialize WhatsApp Client with LocalAuth for session persistence
 const client = new Client({
     authStrategy: new LocalAuth({
@@ -83,7 +129,7 @@ const client = new Client({
     }),
     puppeteer: {
         headless: true,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        executablePath: detectedBrowser,
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
