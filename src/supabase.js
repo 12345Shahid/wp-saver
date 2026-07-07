@@ -2,19 +2,23 @@
  * Supabase Database and Storage connector for WhatsApp Auto-Saver
  */
 require('dotenv').config();
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+    try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
+}
 if (typeof global.WebSocket === 'undefined') {
     try { global.WebSocket = require('ws'); } catch (e) {}
 }
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('./logger');
 
-let supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const bucketName = process.env.SUPABASE_BUCKET || 'whatsapp-media';
+let supabaseUrl = (process.env.SUPABASE_URL || '').trim().replace(/^["']|["']$/g, '');
+const supabaseKey = (process.env.SUPABASE_KEY || '').trim().replace(/^["']|["']$/g, '');
+const bucketName = (process.env.SUPABASE_BUCKET || 'whatsapp-media').trim().replace(/^["']|["']$/g, '');
 
 // Clean trailing slashes or /rest/v1/ if user accidentally pasted the REST URL instead of base Project URL
 if (supabaseUrl) {
-    supabaseUrl = supabaseUrl.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
+    supabaseUrl = supabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 }
 
 let supabase = null;

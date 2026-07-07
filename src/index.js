@@ -5,6 +5,10 @@
  */
 
 require('dotenv').config();
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+    try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}
+}
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const logger = require('./logger');
