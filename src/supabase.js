@@ -10,6 +10,7 @@ if (typeof global.WebSocket === 'undefined') {
     try { global.WebSocket = require('ws'); } catch (e) {}
 }
 const { createClient } = require('@supabase/supabase-js');
+const crossFetch = require('cross-fetch');
 const logger = require('./logger');
 
 let supabaseUrl = (process.env.SUPABASE_URL || '').trim().replace(/^["']|["']$/g, '');
@@ -26,7 +27,10 @@ let isConfigured = false;
 
 if (supabaseUrl && supabaseUrl.startsWith('http') && supabaseKey && supabaseKey !== '') {
     try {
-        supabase = createClient(supabaseUrl, supabaseKey);
+        supabase = createClient(supabaseUrl, supabaseKey, {
+            auth: { persistSession: false },
+            global: { fetch: crossFetch }
+        });
         isConfigured = true;
     } catch (err) {
         logger.error('Failed to initialize Supabase client:', err.message);
@@ -51,22 +55,24 @@ async function testConnection(retries = 3) {
                     logger.info('Please run the SQL script inside schema.sql in your Supabase SQL Editor.');
                     return false;
                 }
+                const details = error.details || error.hint || error.code || '';
                 if (attempt === retries) {
-                    logger.error('Supabase connection test failed:', error.message);
+                    logger.error(`Supabase connection test failed: ${error.message} ${details ? '(' + details + ')' : ''}`);
                     return false;
                 }
-                logger.warn(`Supabase connection test attempt ${attempt}/${retries} failed (${error.message}). Retrying in 2s...`);
+                logger.warn(`Supabase connection test attempt ${attempt}/${retries} failed (${error.message} ${details}). Retrying in 2s...`);
                 await new Promise(res => setTimeout(res, 2000));
                 continue;
             }
             logger.success('Connected to Supabase PostgreSQL database successfully!');
             return true;
         } catch (err) {
+            const cause = err.cause ? (err.cause.message || err.cause) : '';
             if (attempt === retries) {
-                logger.error('Unexpected error connecting to Supabase:', err.message);
+                logger.error(`Unexpected error connecting to Supabase: ${err.message} ${cause ? '[Cause: ' + cause + ']' : ''}`);
                 return false;
             }
-            logger.warn(`Supabase connection attempt ${attempt}/${retries} threw (${err.message}). Retrying in 2s...`);
+            logger.warn(`Supabase connection attempt ${attempt}/${retries} threw (${err.message} ${cause}). Retrying in 2s...`);
             await new Promise(res => setTimeout(res, 2000));
         }
     }
