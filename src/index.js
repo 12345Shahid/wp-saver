@@ -227,7 +227,7 @@ async function handleMessage(msg, isRescued = false) {
         const contact = await msg.getContact().catch(() => ({}));
         const chat = await msg.getChat().catch(() => ({}));
 
-        const senderPhone = contact.number || contact.id?.user || msg.from || '';
+        const senderPhone = contact.number || contact.id?.user || msg.author || msg.from || '';
         const senderName = contact.pushname || contact.name || senderPhone || 'Unknown';
         const chatName = chat.name || senderName;
 
@@ -235,14 +235,22 @@ async function handleMessage(msg, isRescued = false) {
         if (targetFilter && !isRescued) {
             const filterDigits = targetFilter.replace(/\D/g, '');
             const senderDigits = senderPhone.replace(/\D/g, '');
-            const fromDigits = msg.from.replace(/\D/g, '');
+            const fromDigits = (msg.from || '').replace(/\D/g, '');
+            const toDigits = (msg.to || '').replace(/\D/g, '');
+            const authorDigits = (msg.author || '').replace(/\D/g, '');
+            const chatDigits = (chat.id?.user || chat.id?._serialized || '').replace(/\D/g, '');
 
-            const matchPhone = filterDigits && (senderDigits.includes(filterDigits) || fromDigits.includes(filterDigits));
-            const matchName = senderName.toLowerCase().includes(targetFilter);
-            const matchChat = chatName.toLowerCase().includes(targetFilter);
-            const matchFrom = msg.from.toLowerCase().includes(targetFilter);
+            const matchPhone = filterDigits && (
+                senderDigits.includes(filterDigits) || 
+                fromDigits.includes(filterDigits) || 
+                toDigits.includes(filterDigits) || 
+                authorDigits.includes(filterDigits) || 
+                chatDigits.includes(filterDigits)
+            );
+            const matchName = senderName.toLowerCase().includes(targetFilter) || chatName.toLowerCase().includes(targetFilter);
+            const matchFrom = (msg.from || '').toLowerCase().includes(targetFilter) || (msg.to || '').toLowerCase().includes(targetFilter);
 
-            if (!matchPhone && !matchName && !matchChat && !matchFrom) {
+            if (!matchPhone && !matchName && !matchFrom) {
                 logger.info(`⏭️ [FILTERED] Ignored message from "${senderName}" (${senderPhone}) - did not match filter "${targetFilter}"`);
                 return;
             }

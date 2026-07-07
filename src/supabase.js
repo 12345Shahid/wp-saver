@@ -36,25 +36,37 @@ if (supabaseUrl && supabaseUrl.startsWith('http') && supabaseKey && supabaseKey 
 /**
  * Test Supabase DB connection on startup
  */
-async function testConnection() {
+async function testConnection(retries = 3) {
     if (!isConfigured) return false;
-    try {
-        const { error } = await supabase.from('whatsapp_messages').select('id').limit(1);
-        if (error) {
-            if (error.code === '42P01') {
-                logger.error('Table "whatsapp_messages" does not exist in your Supabase database!');
-                logger.info('Please run the SQL script inside schema.sql in your Supabase SQL Editor.');
-            } else {
-                logger.error('Supabase connection test failed:', error.message);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const { error } = await supabase.from('whatsapp_messages').select('id').limit(1);
+            if (error) {
+                if (error.code === '42P01') {
+                    logger.error('Table "whatsapp_messages" does not exist in your Supabase database!');
+                    logger.info('Please run the SQL script inside schema.sql in your Supabase SQL Editor.');
+                    return false;
+                }
+                if (attempt === retries) {
+                    logger.error('Supabase connection test failed:', error.message);
+                    return false;
+                }
+                logger.warn(`Supabase connection test attempt ${attempt}/${retries} failed (${error.message}). Retrying in 2s...`);
+                await new Promise(res => setTimeout(res, 2000));
+                continue;
             }
-            return false;
+            logger.success('Connected to Supabase PostgreSQL database successfully!');
+            return true;
+        } catch (err) {
+            if (attempt === retries) {
+                logger.error('Unexpected error connecting to Supabase:', err.message);
+                return false;
+            }
+            logger.warn(`Supabase connection attempt ${attempt}/${retries} threw (${err.message}). Retrying in 2s...`);
+            await new Promise(res => setTimeout(res, 2000));
         }
-        logger.success('Connected to Supabase PostgreSQL database successfully!');
-        return true;
-    } catch (err) {
-        logger.error('Unexpected error connecting to Supabase:', err.message);
-        return false;
     }
+    return false;
 }
 
 /**
