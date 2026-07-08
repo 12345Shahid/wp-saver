@@ -73,7 +73,7 @@ app.listen(PORT, '0.0.0.0', () => {
 logger.banner();
 
 // Initialize target filter if specified in .env
-const targetFilter = process.env.TARGET_FILTER ? process.env.TARGET_FILTER.trim().toLowerCase() : null;
+const targetFilter = process.env.TARGET_FILTER ? process.env.TARGET_FILTER.replace(/^["']|["']$/g, '').trim().toLowerCase() : null;
 if (targetFilter) {
     logger.info(`🎯 TARGET FILTER ACTIVE: Only capturing messages matching "${targetFilter}"`);
 } else {
