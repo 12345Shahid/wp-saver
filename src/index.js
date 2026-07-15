@@ -219,6 +219,16 @@ client.on('ready', async () => {
     logger.success('🤖 WHATSAPP AUTO-SAVER IS ONLINE AND CONNECTED!');
     logger.info('Listening for incoming text messages, voice notes, images, and deletions...');
     
+    // Attach listener to underlying Puppeteer browser to catch silent browser crashes ("Target closed")
+    if (client.pupBrowser) {
+        client.pupBrowser.once('disconnected', () => {
+            logger.error('🚨 FATAL: Underlying Chromium browser closed or crashed ("Target closed"). Triggering automatic container restart...');
+            setTimeout(() => {
+                process.exit(1);
+            }, 1500);
+        });
+    }
+
     // Test Supabase connection
     await supabase.testConnection();
 });
@@ -308,6 +318,10 @@ async function handleMessage(msg, isRescued = false) {
                 }
             } catch (mediaErr) {
                 logger.error('Failed to download/upload media:', mediaErr.message);
+                if (mediaErr.message && (mediaErr.message.includes('Target closed') || mediaErr.message.includes('Session closed') || mediaErr.message.includes('Protocol error'))) {
+                    logger.error('🚨 FATAL BROWSER CRASH DETECTED during media download ("Target closed"). Triggering immediate restart so capture resumes automatically...');
+                    setTimeout(() => process.exit(1), 1000);
+                }
             }
         }
 
@@ -390,6 +404,11 @@ client.on('disconnected', (reason) => {
     isAuthenticated = false;
     currentQrDataUrl = null;
     logger.warn('WhatsApp Client was disconnected:', reason);
+    logger.info('Attempting to recover session or restart container...');
+    setTimeout(() => {
+        try { client.destroy(); } catch (e) {}
+        process.exit(1); // Exiting triggers automatic clean container reboot in Railway / Docker / process managers
+    }, 2000);
 });
 
 /**
@@ -434,6 +453,29 @@ try {
         cleanLocks(authDir);
     }
 } catch (e) {}
+
+/**
+ * Global Error Monitoring & Crash Recovery
+ * If Chromium browser instance terminates (`Target closed` / `Session closed`) unexpectedly during background polling,
+ * clean up and exit so the host platform (Railway/Docker) automatically restarts a fresh instance immediately.
+ */
+process.on('unhandledRejection', (reason, promise) => {
+    const errText = (reason && (reason.stack || reason.message || reason.toString())) || '';
+    logger.error('Unhandled Rejection detected:', errText);
+    if (errText.includes('Target closed') || errText.includes('Session closed') || errText.includes('Protocol error')) {
+        logger.error('🚨 FATAL BROWSER CRASH: Chromium closed unexpectedly. Triggering container restart...');
+        setTimeout(() => process.exit(1), 1000);
+    }
+});
+
+process.on('uncaughtException', (err) => {
+    const errText = (err && (err.stack || err.message || err.toString())) || '';
+    logger.error('Uncaught Exception detected:', errText);
+    if (errText.includes('Target closed') || errText.includes('Session closed') || errText.includes('Protocol error')) {
+        logger.error('🚨 FATAL BROWSER CRASH: Chromium closed unexpectedly. Triggering container restart...');
+        setTimeout(() => process.exit(1), 1000);
+    }
+});
 
 // Start the client
 logger.info('Initializing WhatsApp Web browser instance...');
