@@ -260,20 +260,36 @@ async function overrideMediaResolve(page) {
                 if (msg.mediaData.mediaStage.includes('ERROR') || msg.mediaData.mediaStage === 'FETCHING') {
                     return null;
                 }
-                const cached = window.require('WAWebMediaInMemoryBlobCache')
-                    .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+                const filehash = msg.mediaObject?.filehash || msg.mediaData?.filehash || msg.filehash;
+                const cached = filehash
+                    ? window.require('WAWebMediaInMemoryBlobCache').InMemoryMediaBlobCache.get(filehash)
+                    : null;
                 let blob;
                 if (cached) {
                     blob = cached;
                 } else if (msg.mediaObject?.mediaBlob) {
-                    blob = msg.mediaObject.mediaBlob.forceToBlob();
+                    blob = typeof msg.mediaObject.mediaBlob.forceToBlob === 'function'
+                        ? msg.mediaObject.mediaBlob.forceToBlob()
+                        : msg.mediaObject.mediaBlob;
+                } else if (msg.mediaData?.mediaBlob) {
+                    blob = typeof msg.mediaData.mediaBlob.forceToBlob === 'function'
+                        ? msg.mediaData.mediaBlob.forceToBlob()
+                        : msg.mediaData.mediaBlob;
+                } else if (msg.mediaObject?.opaqueData) {
+                    blob = typeof msg.mediaObject.opaqueData.forceToBlob === 'function'
+                        ? msg.mediaObject.opaqueData.forceToBlob()
+                        : msg.mediaObject.opaqueData;
+                } else if (msg.mediaData?.opaqueData) {
+                    blob = typeof msg.mediaData.opaqueData.forceToBlob === 'function'
+                        ? msg.mediaData.opaqueData.forceToBlob()
+                        : msg.mediaData.opaqueData;
                 }
                 if (!blob) return null;
                 return {
                     blob,
-                    mimetype: msg.mimetype,
-                    filename: msg.filename,
-                    filesize: msg.size,
+                    mimetype: msg.mimetype || msg.mediaData?.mimetype || 'application/octet-stream',
+                    filename: msg.filename || msg.mediaData?.filename || `file_${msg.id?._serialized}`,
+                    filesize: msg.size || msg.mediaData?.size || 0,
                 };
             };
         });
@@ -317,6 +333,7 @@ async function handleMessage(msg, isRescued = false) {
             }
         }
 
+        const chatId = (chat && chat.id && chat.id._serialized) || (msg.fromMe ? msg.to : msg.from) || '';
         const timestamp = new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString();
         const messageId = msg.id?._serialized || msg.id?.id || `msg_${Date.now()}`;
         const messageType = msg.type || 'chat';
@@ -324,7 +341,7 @@ async function handleMessage(msg, isRescued = false) {
         let mediaUrl = null;
         let mediaType = null;
 
-        logger.info(`📬 Incoming [${messageType.toUpperCase()}] from "${senderName}" (${senderPhone}) in "${chatName}"`);
+        logger.info(`📬 [${msg.fromMe ? 'OUTGOING' : 'INCOMING'}] [${messageType.toUpperCase()}] from "${senderName}" (${senderPhone}) in "${chatName}"`);
 
         // Handle Media Download & Upload (Level 1: Voice Notes / Images / Videos)
         if (msg.hasMedia || ['ptt', 'audio', 'image', 'video', 'document', 'sticker'].includes(messageType)) {
@@ -333,12 +350,12 @@ async function handleMessage(msg, isRescued = false) {
                 await overrideMediaResolve(client.pupPage);
                 let media = await msg.downloadMedia();
                 
-                // Retry up to 3 times if media isn't ready immediately (very common for PTT / voice notes!)
+                // Retry up to 8 times if media isn't ready immediately (very common for PTT / voice notes & outgoing sync!)
                 let retries = 0;
-                while (!media && retries < 3) {
+                while (!media && retries < 8) {
                     retries++;
-                    logger.media(`Media [${messageType}] stream not ready yet, retrying download (${retries}/3)...`);
-                    await new Promise(res => setTimeout(res, 1500));
+                    logger.media(`Media [${messageType}] stream not ready yet, retrying download (${retries}/8)...`);
+                    await new Promise(res => setTimeout(res, 2000));
                     await overrideMediaResolve(client.pupPage);
                     media = await msg.downloadMedia();
                 }
@@ -363,7 +380,7 @@ async function handleMessage(msg, isRescued = false) {
                         mediaUrl = await supabase.uploadMedia(buffer, filename, mediaType || 'audio/ogg');
                     }
                 } else {
-                    logger.warn(`Could not download media data for message [${messageType}]. It may have expired or failed decryption.`);
+                    logger.warn(`Could not download media data for message [${messageType}] even after retries. It may be still uploading or expired.`);
                 }
             } catch (mediaErr) {
                 logger.error('Failed to download/upload media:', mediaErr.message);
@@ -379,7 +396,7 @@ async function handleMessage(msg, isRescued = false) {
             timestamp: timestamp,
             sender_phone: senderPhone,
             sender_name: senderName,
-            chat_id: msg.from,
+            chat_id: chatId,
             chat_name: chatName,
             message_type: messageType,
             text_content: textContent,
@@ -401,9 +418,11 @@ async function handleMessage(msg, isRescued = false) {
             logger.success(`Saved text: "${textContent.length > 50 ? textContent.substring(0, 50) + '...' : textContent}"`);
         } else if (mediaUrl) {
             logger.success(`Saved media: ${mediaUrl}`);
+        } else {
+            logger.success(`Saved message metadata (ID: ${messageId})`);
         }
     } catch (err) {
-        logger.error('Error handling incoming message:', err.message);
+        logger.error('Error handling incoming/outgoing message:', err.message);
     }
 }
 
