@@ -233,6 +233,47 @@ client.on('ready', async () => {
     await supabase.testConnection();
 });
 
+async function overrideMediaResolve(page) {
+    if (!page) return;
+    try {
+        await page.evaluate(() => {
+            if (!window.WWebJS) return;
+            window.WWebJS.resolveMediaBlob = async (msgId) => {
+                const { Msg } = window.require('WAWebCollections');
+                const msg = Msg.get(msgId) || (await Msg.getMessagesById([msgId]))?.messages?.[0];
+                if (!msg || !msg.mediaData || msg.mediaData.mediaStage === 'REUPLOADING') {
+                    return null;
+                }
+                try {
+                    await msg.downloadMedia({
+                        downloadEvenIfExpensive: true,
+                        rmrReason: 1,
+                        isUserInitiated: true,
+                    });
+                } catch (err) {}
+                if (msg.mediaData.mediaStage.includes('ERROR') || msg.mediaData.mediaStage === 'FETCHING') {
+                    return null;
+                }
+                const cached = window.require('WAWebMediaInMemoryBlobCache')
+                    .InMemoryMediaBlobCache.get(msg.mediaObject?.filehash);
+                let blob;
+                if (cached) {
+                    blob = cached;
+                } else if (msg.mediaObject?.mediaBlob) {
+                    blob = msg.mediaObject.mediaBlob.forceToBlob();
+                }
+                if (!blob) return null;
+                return {
+                    blob,
+                    mimetype: msg.mimetype,
+                    filename: msg.filename,
+                    filesize: msg.size,
+                };
+            };
+        });
+    } catch (e) {}
+}
+
 /**
  * Core function to handle and save messages
  */
@@ -283,6 +324,7 @@ async function handleMessage(msg, isRescued = false) {
         if (msg.hasMedia || ['ptt', 'audio', 'image', 'video', 'document', 'sticker'].includes(messageType)) {
             logger.media(`Media [${messageType}] detected! Downloading file directly into computer memory...`);
             try {
+                await overrideMediaResolve(client.pupPage);
                 let media = await msg.downloadMedia();
                 
                 // Retry up to 3 times if media isn't ready immediately (very common for PTT / voice notes!)
@@ -291,6 +333,7 @@ async function handleMessage(msg, isRescued = false) {
                     retries++;
                     logger.media(`Media [${messageType}] stream not ready yet, retrying download (${retries}/3)...`);
                     await new Promise(res => setTimeout(res, 1500));
+                    await overrideMediaResolve(client.pupPage);
                     media = await msg.downloadMedia();
                 }
 
