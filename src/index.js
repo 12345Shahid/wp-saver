@@ -80,6 +80,8 @@ if (targetFilter) {
     logger.info(`🌐 NO FILTER SET: Capturing messages from ALL incoming chats.`);
 }
 
+const processedMessageIds = new Set();
+
 /**
  * Dynamically locate valid Chromium/Chrome binary across Nixpacks, Docker, Linux, and Mac
  * Guaranteed to never fail or crash due to dead environment variables or missing system packages.
@@ -241,6 +243,9 @@ client.on('ready', async () => {
 
     // Ensure media resolver override is active immediately upon connection
     await overrideMediaResolve(client.pupPage);
+
+    // Inject direct browser-level message listeners so no incoming/outgoing messages are missed
+    await injectCustomMessageListeners(client.pupPage);
 });
 
 async function overrideMediaResolve(page) {
@@ -300,11 +305,77 @@ async function overrideMediaResolve(page) {
     } catch (e) {}
 }
 
+async function injectCustomMessageListeners(page) {
+    if (!page) return;
+    try {
+        await page.evaluate(() => {
+            if (!window.WWebJS || !window.require) return;
+            if (window.__customMessageListenersInjected) return;
+            window.__customMessageListenersInjected = true;
+            window.__processedMsgIds = window.__processedMsgIds || new Set();
+            window.__botStartTime = window.__botStartTime || (Date.now() / 1000 - 120);
+
+            const { Msg } = window.require('WAWebCollections');
+            if (!Msg) return;
+
+            const processMsg = (msg) => {
+                if (!msg || !msg.id || !msg.id._serialized) return;
+                const msgId = msg.id._serialized;
+                if (window.__processedMsgIds.has(msgId)) return;
+
+                // Skip system/ciphertext/notification types initially
+                if (msg.type === 'ciphertext' || msg.type === 'e2e_notification' || msg.type === 'revoked' || msg.type === 'gp2' || msg.type === 'notification_template') return;
+                if (msg.subtype && typeof msg.subtype === 'string' && msg.subtype.includes('unavailable')) return;
+
+                // Only process live/recent messages (newer than bot start time)
+                const msgTime = msg.t || (msg.timestamp ? msg.timestamp : Date.now() / 1000);
+                if (msgTime < window.__botStartTime) return;
+
+                window.__processedMsgIds.add(msgId);
+                try {
+                    const model = window.WWebJS.getMessageModel(msg);
+                    if (window.onAddMessageEvent) {
+                        window.onAddMessageEvent(model);
+                    }
+                } catch (e) {}
+            };
+
+            // Listen on add
+            Msg.on('add', (msg) => {
+                processMsg(msg);
+            });
+
+            // Also listen on change (e.g. when ciphertext changes to text/media after decryption)
+            Msg.on('change', (msg) => {
+                processMsg(msg);
+            });
+
+            // Also listen specifically on change:type for late decryptions
+            Msg.on('change:type', (msg) => {
+                processMsg(msg);
+            });
+        });
+        logger.info('🛡️ Injected custom real-time message listeners into browser context.');
+    } catch (e) {
+        logger.warn('Could not inject custom message listeners right now:', e.message);
+    }
+}
+
 /**
  * Core function to handle and save messages
  */
 async function handleMessage(msg, isRescued = false) {
     try {
+        const msgIdForDedup = msg.id?._serialized || msg.id?.id || '';
+        if (!isRescued && msgIdForDedup) {
+            if (processedMessageIds.has(msgIdForDedup)) return;
+            processedMessageIds.add(msgIdForDedup);
+            if (processedMessageIds.size > 20000) {
+                const first = processedMessageIds.values().next().value;
+                if (first) processedMessageIds.delete(first);
+            }
+        }
+
         const contact = await msg.getContact().catch(() => ({}));
         const chat = await msg.getChat().catch(() => ({}));
 
