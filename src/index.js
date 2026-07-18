@@ -167,9 +167,15 @@ const client = new Client({
             '--no-first-run',
             '--no-default-browser-check',
             '--disable-gpu',
-            '--single-process',
             '--no-zygote',
-            '--disable-extensions'
+            '--disable-extensions',
+            '--js-flags="--max-old-space-size=150"',
+            '--disable-gl-drawing-for-tests',
+            '--disable-canvas-path-rendering',
+            '--mute-audio',
+            '--disable-infobars',
+            '--disable-breakpad',
+            '--disable-notifications'
         ]
     }
 });
