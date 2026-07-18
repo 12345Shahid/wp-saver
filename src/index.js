@@ -246,6 +246,10 @@ client.on('ready', async () => {
 
     // Inject direct browser-level message listeners so no incoming/outgoing messages are missed
     await injectCustomMessageListeners(client.pupPage);
+
+    // Activate presence cloak so keeping bot online 24/7 does not make you appear "Online" to contacts
+    await client.sendPresenceUnavailable().catch(() => {});
+    await overridePresenceOnline(client.pupPage);
 });
 
 async function overrideMediaResolve(page) {
@@ -358,6 +362,28 @@ async function injectCustomMessageListeners(page) {
         logger.info('🛡️ Injected custom real-time message listeners into browser context.');
     } catch (e) {
         logger.warn('Could not inject custom message listeners right now:', e.message);
+    }
+}
+
+async function overridePresenceOnline(page) {
+    if (!page) return;
+    try {
+        await page.evaluate(() => {
+            if (!window.require) return;
+            try {
+                const presenceAction = window.require('WAWebPresenceChatAction');
+                if (presenceAction) {
+                    presenceAction.sendPresenceAvailable = async () => {
+                        // Suppress sending 'Available' (Online) to keep user offline while bot runs
+                        return presenceAction.sendPresenceUnavailable();
+                    };
+                    presenceAction.sendPresenceUnavailable();
+                }
+            } catch (e) {}
+        });
+        logger.info('🥷 Presence cloak activated: Bot will run silently without showing you "Online" 24/7.');
+    } catch (e) {
+        logger.warn('Could not activate presence cloak right now:', e.message);
     }
 }
 
