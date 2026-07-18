@@ -153,6 +153,7 @@ if (detectedBrowser) {
 
 // Initialize WhatsApp Client with LocalAuth for session persistence
 const client = new Client({
+    authTimeoutMs: 600000, // 10 minutes timeout to prevent 30s timeout on slow/heavy container start
     authStrategy: new LocalAuth({
         clientId: 'whatsapp-auto-saver-session'
     }),
@@ -237,6 +238,9 @@ client.on('ready', async () => {
 
     // Test Supabase connection
     await supabase.testConnection();
+
+    // Ensure media resolver override is active immediately upon connection
+    await overrideMediaResolve(client.pupPage);
 });
 
 async function overrideMediaResolve(page) {
