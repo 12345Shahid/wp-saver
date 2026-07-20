@@ -10,8 +10,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy application source code
+# Copy application source code (includes scripts/ directory)
 COPY . .
+
+# [FIX] Apply WhatsApp Web July 2026 compatibility patch (id._serialized → id.$1)
+RUN node scripts/patch-serialized.js
 
 # Create directory for persistent WhatsApp session storage and grant ownership to pptruser
 RUN mkdir -p /app/.wwebjs_auth && chown -R pptruser:pptruser /app

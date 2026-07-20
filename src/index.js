@@ -322,9 +322,21 @@ async function injectCustomMessageListeners(page) {
             const { Msg } = window.require('WAWebCollections');
             if (!Msg) return;
 
+            // [FIX] Helper to normalize id.$1 → id._serialized (WhatsApp Web July 2026 rename)
+            const normalizeId = (msg) => {
+                if (msg && msg.id) {
+                    if (!msg.id._serialized && msg.id.$1) msg.id._serialized = msg.id.$1;
+                    if (msg.id.remote && typeof msg.id.remote === 'object' && !msg.id.remote._serialized && msg.id.remote.$1) {
+                        msg.id.remote._serialized = msg.id.remote.$1;
+                    }
+                }
+                return msg;
+            };
+
             const processMsg = (msg) => {
-                if (!msg || !msg.id || !msg.id._serialized) return;
-                const msgId = msg.id._serialized;
+                normalizeId(msg);
+                const msgId = (msg && msg.id) ? (msg.id._serialized || msg.id.$1) : null;
+                if (!msgId) return;
                 if (window.__processedMsgIds.has(msgId)) return;
 
                 // Skip system/ciphertext/notification types initially
@@ -370,16 +382,32 @@ async function overridePresenceOnline(page) {
     try {
         await page.evaluate(() => {
             if (!window.require) return;
-            try {
-                const presenceAction = window.require('WAWebPresenceChatAction');
-                if (presenceAction) {
-                    presenceAction.sendPresenceAvailable = async () => {
-                        // Suppress sending 'Available' (Online) to keep user offline while bot runs
-                        return presenceAction.sendPresenceUnavailable();
-                    };
-                    presenceAction.sendPresenceUnavailable();
-                }
-            } catch (e) {}
+            // [FIX] Try multiple known module names for presence (WhatsApp renames these periodically)
+            const moduleNames = [
+                'WAWebPresenceChatAction',
+                'WAWebPresenceAction',
+                'WAWebSetPresenceAction',
+                'WAWebPresenceMeAction'
+            ];
+            let presenceAction = null;
+            for (const name of moduleNames) {
+                try {
+                    presenceAction = window.require(name);
+                    if (presenceAction && (presenceAction.sendPresenceAvailable || presenceAction.sendPresenceUnavailable)) break;
+                    presenceAction = null;
+                } catch (e) { presenceAction = null; }
+            }
+            if (presenceAction) {
+                try {
+                    if (presenceAction.sendPresenceAvailable) {
+                        presenceAction.sendPresenceAvailable = async () => {
+                            // Suppress sending 'Available' (Online) to keep user offline while bot runs
+                            if (presenceAction.sendPresenceUnavailable) return presenceAction.sendPresenceUnavailable();
+                        };
+                    }
+                    if (presenceAction.sendPresenceUnavailable) presenceAction.sendPresenceUnavailable();
+                } catch (e) {}
+            }
         });
         logger.info('🥷 Presence cloak activated: Bot will run silently without showing you "Online" 24/7.');
     } catch (e) {
@@ -392,7 +420,8 @@ async function overridePresenceOnline(page) {
  */
 async function handleMessage(msg, isRescued = false) {
     try {
-        const msgIdForDedup = msg.id?._serialized || msg.id?.id || '';
+        // [FIX] Fallback for WhatsApp Web July 2026 id.$1 rename
+        const msgIdForDedup = msg.id?._serialized || msg.id?.$1 || msg.id?.id || '';
         if (!isRescued && msgIdForDedup) {
             if (processedMessageIds.has(msgIdForDedup)) return;
             processedMessageIds.add(msgIdForDedup);
@@ -436,7 +465,7 @@ async function handleMessage(msg, isRescued = false) {
 
         const chatId = (chat && chat.id && chat.id._serialized) || (msg.fromMe ? msg.to : msg.from) || '';
         const timestamp = new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString();
-        const messageId = msg.id?._serialized || msg.id?.id || `msg_${Date.now()}`;
+        const messageId = msg.id?._serialized || msg.id?.$1 || msg.id?.id || `msg_${Date.now()}`;
         const messageType = msg.type || 'chat';
         let textContent = msg.body || '';
         let mediaUrl = null;
@@ -540,8 +569,9 @@ client.on('message_create', (msg) => {
  */
 client.on('message_revoke_everyone', async (after, before) => {
     try {
-        const revokedId = (before && before.id && before.id._serialized) || 
-                          (after && after.id && after.id._serialized) ||
+        // [FIX] Fallback for WhatsApp Web July 2026 id.$1 rename
+        const revokedId = (before && before.id && (before.id._serialized || before.id.$1)) || 
+                          (after && after.id && (after.id._serialized || after.id.$1)) ||
                           (after && after.id);
 
         logger.bypass(`🚨 ALERT: Someone clicked "Delete for Everyone"! Intercepting...`);
