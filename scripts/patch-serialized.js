@@ -73,7 +73,12 @@ function patchUtils() {
         return obj;
     };\n\n    `;
 
-    content = normalizerDef + content;
+    const targetHeader = 'window.WWebJS = {};';
+    if (content.includes(targetHeader)) {
+        content = content.replace(targetHeader, targetHeader + '\n' + normalizerDef);
+    } else {
+        content = normalizerDef + content;
+    }
 
     // Inside getMessageModel: normalize message before serialize, normalize msg right after serialize, and fix remote._serialized
     content = content.replace(
