@@ -334,8 +334,9 @@ async function injectCustomMessageListeners(page) {
             };
 
             const processMsg = (msg) => {
-                normalizeId(msg);
-                const msgId = (msg && msg.id) ? (msg.id._serialized || msg.id.$1) : null;
+                const norm = (window.WWebJS && window.WWebJS.deepNormalizeId) ? window.WWebJS.deepNormalizeId : normalizeId;
+                norm(msg);
+                const msgId = (msg && msg.id) ? (msg.id._serialized || msg.id.$1 || msg.id.id) : null;
                 if (!msgId) return;
                 if (window.__processedMsgIds.has(msgId)) return;
 
@@ -349,7 +350,7 @@ async function injectCustomMessageListeners(page) {
 
                 window.__processedMsgIds.add(msgId);
                 try {
-                    const model = window.WWebJS.getMessageModel(msg);
+                    const model = norm(window.WWebJS.getMessageModel(msg));
                     if (window.onAddMessageEvent) {
                         window.onAddMessageEvent(model);
                     }
@@ -434,7 +435,11 @@ async function handleMessage(msg, isRescued = false) {
         const contact = await msg.getContact().catch(() => ({}));
         const chat = await msg.getChat().catch(() => ({}));
 
-        const senderPhone = contact.number || contact.id?.user || msg.author || msg.from || '';
+        const rawFrom = typeof msg.from === 'object' ? (msg.from._serialized || msg.from.$1 || '') : (msg.from || typeof msg._data?.from === 'object' ? (msg._data.from._serialized || msg._data.from.$1 || '') : msg._data?.from || '');
+        const rawTo = typeof msg.to === 'object' ? (msg.to._serialized || msg.to.$1 || '') : (msg.to || typeof msg._data?.to === 'object' ? (msg._data.to._serialized || msg._data.to.$1 || '') : msg._data?.to || '');
+        const rawAuthor = typeof msg.author === 'object' ? (msg.author._serialized || msg.author.$1 || '') : (msg.author || typeof msg._data?.author === 'object' ? (msg._data.author._serialized || msg._data.author.$1 || '') : msg._data?.author || '');
+
+        const senderPhone = contact.number || contact.id?.user || rawAuthor || rawFrom || '';
         const senderName = contact.pushname || contact.name || senderPhone || 'Unknown';
         const chatName = chat.name || senderName;
 
@@ -442,10 +447,10 @@ async function handleMessage(msg, isRescued = false) {
         if (targetFilter && !isRescued) {
             const filterDigits = targetFilter.replace(/\D/g, '');
             const senderDigits = senderPhone.replace(/\D/g, '');
-            const fromDigits = (msg.from || '').replace(/\D/g, '');
-            const toDigits = (msg.to || '').replace(/\D/g, '');
-            const authorDigits = (msg.author || '').replace(/\D/g, '');
-            const chatDigits = (chat.id?.user || chat.id?._serialized || '').replace(/\D/g, '');
+            const fromDigits = rawFrom.replace(/\D/g, '');
+            const toDigits = rawTo.replace(/\D/g, '');
+            const authorDigits = rawAuthor.replace(/\D/g, '');
+            const chatDigits = (chat.id?.user || chat.id?._serialized || chat.id?.$1 || '').replace(/\D/g, '');
 
             const matchPhone = filterDigits && (
                 senderDigits.includes(filterDigits) || 
@@ -455,7 +460,7 @@ async function handleMessage(msg, isRescued = false) {
                 chatDigits.includes(filterDigits)
             );
             const matchName = senderName.toLowerCase().includes(targetFilter) || chatName.toLowerCase().includes(targetFilter);
-            const matchFrom = (msg.from || '').toLowerCase().includes(targetFilter) || (msg.to || '').toLowerCase().includes(targetFilter);
+            const matchFrom = rawFrom.toLowerCase().includes(targetFilter) || rawTo.toLowerCase().includes(targetFilter);
 
             if (!matchPhone && !matchName && !matchFrom) {
                 logger.info(`⏭️ [FILTERED] Ignored message from "${senderName}" (${senderPhone}) - did not match filter "${targetFilter}"`);
@@ -463,7 +468,7 @@ async function handleMessage(msg, isRescued = false) {
             }
         }
 
-        const chatId = (chat && chat.id && chat.id._serialized) || (msg.fromMe ? msg.to : msg.from) || '';
+        const chatId = (chat && chat.id && (chat.id._serialized || chat.id.$1)) || (msg.fromMe ? rawTo : rawFrom) || '';
         const timestamp = new Date((msg.timestamp || Date.now() / 1000) * 1000).toISOString();
         const messageId = msg.id?._serialized || msg.id?.$1 || msg.id?.id || `msg_${Date.now()}`;
         const messageType = msg.type || 'chat';
