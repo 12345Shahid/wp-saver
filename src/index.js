@@ -346,7 +346,12 @@ async function injectCustomMessageListeners(page) {
 
                 // Only process live/recent messages (newer than bot start time)
                 const msgTime = msg.t || (msg.timestamp ? msg.timestamp : Date.now() / 1000);
-                if (msgTime < window.__botStartTime) return;
+                if (msgTime < window.__botStartTime) {
+                    if (window.onAddMessageEvent) {
+                        window.onAddMessageEvent({ _diagnosticError: `DROPPED OLD MESSAGE: msgTime=${msgTime}, botStartTime=${window.__botStartTime}`, msgId: msgId });
+                    }
+                    return;
+                }
 
                 window.__processedMsgIds.add(msgId);
                 try {
@@ -354,11 +359,18 @@ async function injectCustomMessageListeners(page) {
                     if (window.onAddMessageEvent) {
                         window.onAddMessageEvent(model);
                     }
-                } catch (e) {}
+                } catch (e) {
+                    if (window.onAddMessageEvent) {
+                        window.onAddMessageEvent({ _diagnosticError: `ERROR in getMessageModel: ${e.message}`, stack: e.stack, msgId: msgId });
+                    }
+                }
             };
 
             // Listen on add
             Msg.on('add', (msg) => {
+                if (window.onAddMessageEvent) {
+                    window.onAddMessageEvent({ _diagnosticError: `Msg.on('add') FIRED FOR: ${msg.id?._serialized || msg.id?.$1 || 'unknown'}`, msgId: 'internal' });
+                }
                 processMsg(msg);
             });
 
@@ -421,6 +433,12 @@ async function overridePresenceOnline(page) {
  */
 async function handleMessage(msg, isRescued = false) {
     try {
+        if (msg._diagnosticError) {
+            logger.error(`[DIAGNOSTIC BROWSER ERROR] ID: ${msg.msgId}`, msg._diagnosticError);
+            logger.error(`[DIAGNOSTIC STACK]`, msg.stack);
+            return;
+        }
+
         // [FIX] Fallback for WhatsApp Web July 2026 id.$1 rename
         const msgIdForDedup = msg.id?._serialized || msg.id?.$1 || msg.id?.id || '';
         if (!isRescued && msgIdForDedup) {
