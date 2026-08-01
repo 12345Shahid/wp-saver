@@ -231,6 +231,48 @@ function patchStructures() {
             totalPatches++;
         }
     }
+
+    // GroupNotification.js
+    const gnFile = path.join(structDir, 'GroupNotification.js');
+    if (fs.existsSync(gnFile)) {
+        let content = fs.readFileSync(gnFile, 'utf-8');
+        if (!content.includes('[PATCH-v3]')) {
+            content = content.replace(
+                'super(client);',
+                'super(client);\n        // [PATCH-v3]'
+            );
+            content = content.replace(
+                '? data.id.remote._serialized',
+                '? (data.id.remote._serialized || data.id.remote.$1)'
+            );
+            content = content.replace(
+                '? data.author._serialized',
+                '? (data.author._serialized || data.author.$1)'
+            );
+            fs.writeFileSync(gnFile, content, 'utf-8');
+            console.log('  ✅ Patched: structures/GroupNotification.js ($1 fallbacks for remote, author)');
+            totalPatches++;
+        }
+    }
+
+    // Broadcast.js
+    const broadcastFile = path.join(structDir, 'Broadcast.js');
+    if (fs.existsSync(broadcastFile)) {
+        let content = fs.readFileSync(broadcastFile, 'utf-8');
+        if (!content.includes('[PATCH-v3]')) {
+            content = content.replace(
+                'super(client);',
+                'super(client);\n        // [PATCH-v3]'
+            );
+            content = content.replace(
+                /this\.id\._serialized(?!\s*\|\|)/g,
+                '(this.id._serialized || this.id.$1)'
+            );
+            fs.writeFileSync(broadcastFile, content, 'utf-8');
+            console.log('  ✅ Patched: structures/Broadcast.js ($1 fallbacks for id)');
+            totalPatches++;
+        }
+    }
 }
 
 console.log('🔧 Patching whatsapp-web.js for WhatsApp Web July 2026 _serialized → $1 rename (v3 Defense)...\n');
