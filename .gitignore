@@ -11,6 +11,7 @@ node_modules/
 # WhatsApp Web Session & Cache Data (CRITICAL TO KEEP PRIVATE!)
 .wwebjs_auth/
 .wwebjs_cache/
+auth_info_baileys/
 *.session
 
 # OS generated files
