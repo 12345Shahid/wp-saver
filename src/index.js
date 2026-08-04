@@ -138,6 +138,7 @@ async function startBot() {
         }
 
         if (connection === 'close') {
+            if (global.presenceInterval) clearInterval(global.presenceInterval);
             isAuthenticated = false;
             currentQrDataUrl = null;
             const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -166,6 +167,12 @@ async function startBot() {
             try {
                 await sock.sendPresenceUpdate('unavailable');
                 logger.info('🥷 Presence cloak activated: Bot will run silently without showing you "Online" 24/7.');
+                
+                // Aggressively re-apply offline status every 15 seconds to fight server-side overrides
+                if (global.presenceInterval) clearInterval(global.presenceInterval);
+                global.presenceInterval = setInterval(async () => {
+                    try { await sock.sendPresenceUpdate('unavailable'); } catch (e) {}
+                }, 15000); // 15 seconds is fast enough to stay hidden without triggering spam filters
             } catch (e) {
                 logger.warn('Could not activate presence cloak:', e.message);
             }
@@ -411,11 +418,13 @@ function getExtFromMime(mime) {
 // ── Graceful Shutdown ──────────────────────────────────────────────
 process.on('SIGINT', async () => {
     logger.info('Shutting down auto-saver gracefully...');
+    if (global.presenceInterval) clearInterval(global.presenceInterval);
     process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
     logger.info('Shutting down auto-saver gracefully...');
+    if (global.presenceInterval) clearInterval(global.presenceInterval);
     process.exit(0);
 });
 
