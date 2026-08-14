@@ -93,10 +93,11 @@ async function uploadMedia(buffer, filename, mimeType) {
     }
 
     try {
-        // Create clean unique filename
-        const timestamp = Date.now();
+        // Create clean unique filename with human-readable sortable date (YYYY-MM-DD_HH-mm-ss)
+        const date = new Date();
+        const sortableDate = date.toISOString().replace(/T/, '_').replace(/:/g, '-').split('.')[0];
         const safeFilename = filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-        const filePath = `${timestamp}_${safeFilename}`;
+        const filePath = `${sortableDate}_${safeFilename}`;
 
         // Clean MIME type (strip parameters like '; codecs=opus' which can cause Supabase Storage upload errors for voice notes)
         const cleanContentType = mimeType ? mimeType.split(';')[0].trim() : 'application/octet-stream';
@@ -119,12 +120,17 @@ async function uploadMedia(buffer, filename, mimeType) {
             return null;
         }
 
-        // Retrieve public URL
+        // Retrieve public URL and force download flag
         const { data: urlData } = supabase.storage
             .from(bucketName)
             .getPublicUrl(filePath);
 
-        const publicUrl = urlData?.publicUrl;
+        // Append ?download= to force browser download instead of just viewing
+        let publicUrl = urlData?.publicUrl;
+        if (publicUrl) {
+            publicUrl = publicUrl + (publicUrl.includes('?') ? '&' : '?') + 'download=';
+        }
+
         logger.success(`Media uploaded successfully! URL secured.`);
         return publicUrl;
     } catch (err) {
